@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include <string>
 #include <iostream>
-#include <dirent.h>
 
 // Need to link with Ws2_32.lib
 #pragma comment (lib, "Ws2_32.lib")
@@ -23,13 +22,13 @@
 // Gets the fd for the socket. Returns -1 on failure
 // toBind - whether you bind or connect
 // address - address to connect to (not used for bind)
-int getSocketFD(char* s, bool toBind, std::string address)
+SOCKET getSocketFD(char* s, bool toBind, std::string address)
 {
 	int status;
 	struct addrinfo hints;
 	struct addrinfo* servinfo;
 	struct addrinfo* bound;
-	int sock;
+	SOCKET sock = INVALID_SOCKET;
 	int yes = 1;
 
 	ZeroMemory(&hints, sizeof(hints));
@@ -44,7 +43,7 @@ int getSocketFD(char* s, bool toBind, std::string address)
 		if ((status = getaddrinfo(NULL, s, &hints, &servinfo)) != 0)
 		{
 			std::cout << "Error: getaddrinfo failed." << std::endl;
-			return -1;
+			return INVALID_SOCKET;
 		}
 	}
 	else
@@ -52,7 +51,7 @@ int getSocketFD(char* s, bool toBind, std::string address)
 		if ((status = getaddrinfo(address.c_str(), s, &hints, &servinfo)) != 0)
 		{
 			std::cout << "Error: getaddrinfo failed." << std::endl;
-			return -1;
+			return INVALID_SOCKET;
 		}
 	}
 
@@ -61,12 +60,12 @@ int getSocketFD(char* s, bool toBind, std::string address)
 	for (bound = servinfo; bound != NULL; bound = bound->ai_next)
 	{
 		sock = socket(bound->ai_family, bound->ai_socktype, bound->ai_protocol);
-		if (sock == -1) continue;
+		if (sock == INVALID_SOCKET) continue;
 
 		if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (char*)& yes, sizeof(int)) == -1)
 		{
 			std::cout << "Error: setsockopt failed." << std::endl;
-			return -1;
+			return INVALID_SOCKET;
 		}
 		if (toBind)
 		{
@@ -93,7 +92,7 @@ int getSocketFD(char* s, bool toBind, std::string address)
 	if (bound == NULL)
 	{
 		std::cout << "Error: failed to bind to anything." << std::endl;
-		return -1;
+		return INVALID_SOCKET;
 	}
 
 	//Free up the space since the addrinfo is no longer needed
@@ -102,10 +101,10 @@ int getSocketFD(char* s, bool toBind, std::string address)
 	//Try to listen if you're binding
 	if (toBind)
 	{
-		if (listen(sock, 3) == -1)
+		if (listen(sock, SOMAXCONN) == -1)
 		{
 			std::cout << "Error: failed to listen." << std::endl;
-			return -1;
+			return INVALID_SOCKET;
 		}
 	}
 
@@ -113,7 +112,7 @@ int getSocketFD(char* s, bool toBind, std::string address)
 	return sock;
 }
 
-int getSocketFD(int p, bool toBind, std::string address)
+SOCKET getSocketFD(int p, bool toBind, std::string address)
 {
 	char port[6];
 	sprintf(port, "%d", p);
@@ -144,8 +143,8 @@ int __cdecl main(void)
 	WSADATA wsaData;
 	int iResult;
 
-	SOCKET ListenSocket = INVALID_SOCKET;
-	SOCKET ClientSocket = INVALID_SOCKET;
+	SOCKET listen_socket = INVALID_SOCKET;
+	SOCKET command_socket = INVALID_SOCKET;
 
 	char recvbuf[DEFAULT_BUFLEN];
 	int recvbuflen = DEFAULT_BUFLEN;
@@ -157,26 +156,27 @@ int __cdecl main(void)
 		return 1;
 	}
 
-	ListenSocket = getSocketFD(DEFAULT_PORT, true, "");
+	listen_socket = getSocketFD(DEFAULT_PORT, true, "");
 
 	while (true)
 	{
 		// Accept a client socket
-		ClientSocket = accept(ListenSocket, NULL, NULL);
-		if (ClientSocket == INVALID_SOCKET) {
+		command_socket = accept(listen_socket, NULL, NULL);
+		if (command_socket == INVALID_SOCKET) {
 			printf("accept failed with error: %d\n", WSAGetLastError());
-			closesocket(ListenSocket);
+			closesocket(listen_socket);
 			WSACleanup();
-			return 1;
+			continue;
 		}
 
 		std::string to_send;
 
 		bool image_mode = false;
-		int dataFD = -1;
+		SOCKET data_socket = INVALID_SOCKET;
+		File currentWorkingDirectory = File::getCurrentWorkingDirectory();
 
 		to_send = "220 Service ready for new user.\n";
-		if (send(ClientSocket, to_send.c_str(), to_send.length(), 0) == -1)
+		if (send(command_socket, to_send.c_str(), to_send.length(), 0) == -1)
 		{
 			std::cout << "Error sending." << std::endl;
 		}
@@ -184,7 +184,7 @@ int __cdecl main(void)
 		// Receive until the peer shuts down the connection
 		do {
 
-			iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
+			iResult = recv(command_socket, recvbuf, recvbuflen, 0);
 			if (iResult > 0) {
 				std::string msg = "";
 				for (int x = 0; x < iResult; x++)
@@ -199,34 +199,34 @@ int __cdecl main(void)
 					// Accept all users because I'm secure like that
 					to_send = "230 User logged in, proceed.\n";
 					std::cout << "Answered: " << to_send << std::endl;
-					send(ClientSocket, to_send.c_str(), to_send.size(), 0);
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
 				}
 				else if (msg.substr(0, 4) == "PASS")
 				{
 					// Accept all users because I'm secure like that
 					to_send = "230 User logged in, proceed.\n";
 					std::cout << "Answered: " << to_send << std::endl;
-					send(ClientSocket, to_send.c_str(), to_send.size(), 0);
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
 				}
 				else if (msg.substr(0, 4) == "NOOP")
 				{
 					// No operation
 					to_send = "200 Command okay.\n";
 					std::cout << "Answered: " << to_send << std::endl;
-					send(ClientSocket, to_send.c_str(), to_send.size(), 0);
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
 				}
 				else if (msg.substr(0, 4) == "QUIT")
 				{
 					// Quit
 					to_send = "221 Service closing control connection.\n";
 					std::cout << "Answered: " << to_send << std::endl;
-					send(ClientSocket, to_send.c_str(), to_send.size(), 0);
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
 				}
 				else if (msg.substr(0, 3) == "PWD")
 				{
-					to_send = "257 \"" + File::getCurrentWorkingDirectory().getFullPathName().toStdString() + "\" is your current location\n";
+					to_send = "257 \"" + currentWorkingDirectory.getFullPathName().toStdString() + "\" is your current location\n";
 					std::cout << "Answered: " << to_send << std::endl;
-					send(ClientSocket, to_send.c_str(), to_send.size(), 0);
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
 				}
 				else if (msg.substr(0, 4) == "TYPE")
 				{
@@ -241,7 +241,7 @@ int __cdecl main(void)
 
 					to_send = "200 Command okay.\n";
 					std::cout << "Answered: " << to_send << std::endl;
-					send(ClientSocket, to_send.c_str(), to_send.size(), 0);
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
 				}
 				else if (msg.substr(0, 4) == "PORT")
 				{
@@ -266,21 +266,21 @@ int __cdecl main(void)
 					// Get the file descriptor
 					std::cout << "Attempting to open port: " << portNumber << std::endl;
 					std::cout << "From address: " << address << std::endl;
-					dataFD = getSocketFD(portNumber, false, address);
+					data_socket = getSocketFD(portNumber, false, address);
 
-					if (dataFD < 0)
+					if (data_socket == INVALID_SOCKET)
 					{
 						// Port open failure
 						to_send = "425 Can't open data connection.\n";
 						std::cout << "Answered: " << to_send << std::endl;
-						send(ClientSocket, to_send.c_str(), to_send.size(), 0);
+						send(command_socket, to_send.c_str(), to_send.size(), 0);
 						continue;
 					}
 
 					// Port open success
 					to_send = "200 Command okay.\n";
 					std::cout << "Answered: " << to_send << std::endl;
-					send(ClientSocket, to_send.c_str(), to_send.size(), 0);
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
 				}
 				else if (msg.substr(0, 4) == "LIST")
 				{
@@ -290,22 +290,22 @@ int __cdecl main(void)
 						// Not yet in image mode
 						to_send = "451 Requested action aborted: local error in processing\n";
 						std::cout << "Answered: " << to_send << std::endl;
-						send(ClientSocket, to_send.c_str(), to_send.size(), 0);
+						send(command_socket, to_send.c_str(), to_send.size(), 0);
 						continue;
 					}
 
 					// Now, make sure PORT has been called
-					if (dataFD < 0)
+					if (data_socket == INVALID_SOCKET)
 					{
 						// Port hasn't been set
 						to_send = "451 Requested action aborted: local error in processing\n";
 						std::cout << "Answered: " << to_send << std::endl;
-						send(ClientSocket, to_send.c_str(), to_send.size(), 0);
+						send(command_socket, to_send.c_str(), to_send.size(), 0);
 						continue;
 					}
 
 					// Open directory
-					File& directory = File::getCurrentWorkingDirectory();
+					File& directory = currentWorkingDirectory;
 					std::string files = "";
 					if (Trim(msg) == "LIST")
 					{
@@ -338,26 +338,41 @@ int __cdecl main(void)
 					//tell the client that data transfer is about to happen
 					to_send = "125 Data connection already open; transfer starting.\n";
 					std::cout << "Answered: " << to_send << std::endl;
-					send(ClientSocket, to_send.c_str(), to_send.size(), 0);
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
 
 					// send
-					send(dataFD, files.c_str(), files.length(), 0);
+					send(data_socket, files.c_str(), files.length(), 0);
 					std::cout << "Answered: " << files << std::endl;
-					closesocket(dataFD);
-					dataFD = -1;
+					closesocket(data_socket);
+					data_socket = INVALID_SOCKET;
 
 					// done
 					to_send = "250 Requested file action okay, completed.\n";
 
 					std::cout << "Answered: " << to_send << std::endl;
-					send(ClientSocket, to_send.c_str(), to_send.size(), 0);
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
+				}
+				else if (msg.substr(0, 4) == "CDUP")
+				{
+					currentWorkingDirectory = currentWorkingDirectory.getParentDirectory();
+
+					to_send = "200 Okay.\n";
+					std::cout << "Answered: " << to_send << std::endl;
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
+				}
+				else if (msg.substr(0, 3) == "CWD")
+				{
+					currentWorkingDirectory = currentWorkingDirectory.getChildFile(Trim(msg.substr(4)));
+					to_send = "250 Okay.\n";
+					std::cout << "Answered: " << to_send << std::endl;
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
 				}
 				else
 				{
 					// Unimplemented command
 					to_send = "502 Command not implemented.\n";
 					std::cout << "Answered: " << to_send << std::endl;
-					send(ClientSocket, to_send.c_str(), to_send.size(), 0);
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
 				}
 			}
 			else if (iResult == 0) {
@@ -365,7 +380,7 @@ int __cdecl main(void)
 			}
 			else {
 				printf("recv failed with error: %d\n", WSAGetLastError());
-				closesocket(ClientSocket);
+				closesocket(command_socket);
 				WSACleanup();
 				return 1;
 			}
@@ -373,15 +388,15 @@ int __cdecl main(void)
 		} while (iResult > 0);
 
 		// shutdown the connection since we're done
-		iResult = shutdown(ClientSocket, SD_SEND);
+		iResult = shutdown(command_socket, SD_SEND);
 		if (iResult == SOCKET_ERROR) {
 			printf("shutdown failed with error: %d\n", WSAGetLastError());
-			closesocket(ClientSocket);
+			closesocket(command_socket);
 			WSACleanup();
 			return 1;
 		}
 
 		// cleanup
-		closesocket(ClientSocket);
+		closesocket(command_socket);
 	}
 }
