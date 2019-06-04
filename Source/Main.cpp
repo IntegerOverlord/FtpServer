@@ -32,11 +32,6 @@ int getSocketFD(char* s, bool toBind, std::string address)
 	int sock;
 	int yes = 1;
 
-	//memset(&hints, 0, sizeof hints);
-	//hints.ai_family = AF_UNSPEC;
-	//hints.ai_socktype = SOCK_STREAM;
-	//hints.ai_flags = AI_PASSIVE;
-
 	ZeroMemory(&hints, sizeof(hints));
 	hints.ai_family = AF_INET;
 	hints.ai_socktype = SOCK_STREAM;
@@ -152,10 +147,6 @@ int __cdecl main(void)
 	SOCKET ListenSocket = INVALID_SOCKET;
 	SOCKET ClientSocket = INVALID_SOCKET;
 
-	struct addrinfo* result = NULL;
-	struct addrinfo hints;
-
-	int iSendResult;
 	char recvbuf[DEFAULT_BUFLEN];
 	int recvbuflen = DEFAULT_BUFLEN;
 
@@ -166,48 +157,7 @@ int __cdecl main(void)
 		return 1;
 	}
 
-	ZeroMemory(&hints, sizeof(hints));
-	hints.ai_family = AF_INET;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_protocol = IPPROTO_TCP;
-	hints.ai_flags = AI_PASSIVE;
-
-	// Resolve the server address and port
-	iResult = getaddrinfo(NULL, DEFAULT_PORT, &hints, &result);
-	if (iResult != 0) {
-		printf("getaddrinfo failed with error: %d\n", iResult);
-		WSACleanup();
-		return 1;
-	}
-
-	// Create a SOCKET for connecting to server
-	ListenSocket = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
-	if (ListenSocket == INVALID_SOCKET) {
-		printf("socket failed with error: %ld\n", WSAGetLastError());
-		freeaddrinfo(result);
-		WSACleanup();
-		return 1;
-	}
-
-	// Setup the TCP listening socket
-	iResult = bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen);
-	if (iResult == SOCKET_ERROR) {
-		printf("bind failed with error: %d\n", WSAGetLastError());
-		freeaddrinfo(result);
-		closesocket(ListenSocket);
-		WSACleanup();
-		return 1;
-	}
-
-	freeaddrinfo(result);
-
-	iResult = listen(ListenSocket, SOMAXCONN);
-	if (iResult == SOCKET_ERROR) {
-		printf("listen failed with error: %d\n", WSAGetLastError());
-		closesocket(ListenSocket);
-		WSACleanup();
-		return 1;
-	}
+	ListenSocket = getSocketFD(DEFAULT_PORT, true, "");
 
 	while (true)
 	{
@@ -236,7 +186,6 @@ int __cdecl main(void)
 
 			iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
 			if (iResult > 0) {
-				recvbuf[iResult] = '\0';
 				std::string msg = "";
 				for (int x = 0; x < iResult; x++)
 				{
@@ -356,44 +305,51 @@ int __cdecl main(void)
 					}
 
 					// Open directory
-					DIR* dir;
+					File& directory = File::getCurrentWorkingDirectory();
 					std::string files = "";
 					if (Trim(msg) == "LIST")
 					{
 						std::cout << "LIST no param" << std::endl;
-						dir = opendir(".");
 					}
 					else
 					{
 						std::cout << "LIST with param" << std::endl;
-						dir = opendir(Trim(msg.substr(5)).c_str());
+						directory = File(Trim(msg.substr(5)));
 					}
 
-					if (dir == NULL)
+					DirectoryIterator iter(directory, false, "*", File::findFilesAndDirectories);
+					while (iter.next())
 					{
-						//Failed to open directory
-						std::cout << "Failed to open directory" << std::endl;
-						to_send = "550 Requested action not taken.\n";
-						send(ClientSocket, to_send.c_str(), to_send.size(), 0);
-						continue;
+						File theFileItFound(iter.getFile());
+						if (theFileItFound.isDirectory())
+						{
+							files += "drwxr-xr-x 1 owner group\015\012";
+						}
+						else
+						{
+							files += "-rw-r--r-- 1 owner group\015\012";
+						}
+						Time lastModificationTime = theFileItFound.getLastModificationTime();
+						files += std::to_string(theFileItFound.getSize()) + " " + lastModificationTime.getMonthName(true).toStdString() + " "
+									+ std::to_string(lastModificationTime.getDayOfMonth()) + " " + std::to_string(lastModificationTime.getHours()) + ":" + std::to_string(lastModificationTime.getMinutes())
+									+ " " + theFileItFound.getFileName().toStdString() + "\n";
 					}
-
-					struct dirent* entry;
-					while ((entry = readdir(dir)) != NULL)
-					{
-						files = files + std::string(entry->d_name) + "\n";
-					}
-					closedir(dir);
 
 					//tell the client that data transfer is about to happen
 					to_send = "125 Data connection already open; transfer starting.\n";
+					std::cout << "Answered: " << to_send << std::endl;
 					send(ClientSocket, to_send.c_str(), to_send.size(), 0);
 
 					// send
 					send(dataFD, files.c_str(), files.length(), 0);
+					std::cout << "Answered: " << files << std::endl;
+					closesocket(dataFD);
+					dataFD = -1;
 
 					// done
 					to_send = "250 Requested file action okay, completed.\n";
+
+					std::cout << "Answered: " << to_send << std::endl;
 					send(ClientSocket, to_send.c_str(), to_send.size(), 0);
 				}
 				else
