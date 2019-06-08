@@ -187,13 +187,6 @@ void working_thread(SOCKET command_socket)
 				std::cout << "Answered: " << to_send << std::endl;
 				send(command_socket, to_send.c_str(), to_send.size(), 0);
 			}
-			else if (msg.substr(0, 4) == "NOOP")
-			{
-				// No operation
-				to_send = "200 Command okay.\n";
-				std::cout << "Answered: " << to_send << std::endl;
-				send(command_socket, to_send.c_str(), to_send.size(), 0);
-			}
 			else if (msg.substr(0, 4) == "QUIT")
 			{
 				// Quit
@@ -263,16 +256,6 @@ void working_thread(SOCKET command_socket)
 			}
 			else if (msg.substr(0, 4) == "LIST")
 			{
-				// First, make sure you're in image mode
-				if (!image_mode)
-				{
-					// Not yet in image mode
-					to_send = "451 Requested action aborted: local error in processing\n";
-					std::cout << "Answered: " << to_send << std::endl;
-					send(command_socket, to_send.c_str(), to_send.size(), 0);
-					continue;
-				}
-
 				// Now, make sure PORT has been called
 				if (data_socket == INVALID_SOCKET)
 				{
@@ -293,7 +276,7 @@ void working_thread(SOCKET command_socket)
 				else
 				{
 					std::cout << "LIST with param" << std::endl;
-					directory = File(Trim(msg.substr(5)));
+					directory = directory.getChildFile(Trim(msg.substr(5)));
 				}
 
 				DirectoryIterator iter(directory, false, "*", File::findFilesAndDirectories);
@@ -336,7 +319,7 @@ void working_thread(SOCKET command_socket)
 				currentWorkingDirectory = currentWorkingDirectory.getParentDirectory();
 				currentWorkingDirectory.setAsCurrentWorkingDirectory();
 
-				to_send = "200 Okay.\n";
+				to_send = "250 Okay.\n";
 				std::cout << "Answered: " << to_send << std::endl;
 				send(command_socket, to_send.c_str(), to_send.size(), 0);
 			}
@@ -352,6 +335,70 @@ void working_thread(SOCKET command_socket)
 			else if (msg.substr(0, 4) == "FEAT")
 			{
 				to_send = "211-Features:\nUTF8\n211 END\n";
+				std::cout << "Answered: " << to_send << std::endl;
+				send(command_socket, to_send.c_str(), to_send.size(), 0);
+			}
+			else if (msg.substr(0, 3) == "MKD")
+			{
+				std::string dir_name = msg.substr(4);
+				dir_name = Trim(dir_name);
+
+				File new_dir = currentWorkingDirectory.getChildFile(dir_name);
+
+				if (new_dir.createDirectory().wasOk())
+				{
+					to_send = "257 Created directory.\n";
+					std::cout << "Answered: " << to_send << std::endl;
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
+				}
+				else
+				{
+					to_send = "451 Requested action aborted: local error in processing\n";
+					std::cout << "Answered: " << to_send << std::endl;
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
+				}
+			}
+			else if (msg.substr(0, 4) == "DELE")
+			{
+				std::string file_name = msg.substr(5);
+				file_name = Trim(file_name);
+
+				File file_to_delete = currentWorkingDirectory.getChildFile(file_name);
+
+				if (file_to_delete.deleteFile())
+				{
+					to_send = "257 Deleted.\n";
+					std::cout << "Answered: " << to_send << std::endl;
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
+				}
+				else
+				{
+					to_send = "451 Requested action aborted: local error in processing\n";
+					std::cout << "Answered: " << to_send << std::endl;
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
+				}
+			}
+			else if (msg.substr(0, 3) == "RMD")
+			{
+				std::string dir_name = msg.substr(4);
+				dir_name = Trim(dir_name);
+
+				File dir_to_delete = currentWorkingDirectory.getChildFile(dir_name);
+
+				if (dir_to_delete.deleteRecursively())
+				{
+					to_send = "257 Deleted.\n";
+					std::cout << "Answered: " << to_send << std::endl;
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
+				}
+				else
+				{
+					to_send = "451 Requested action aborted: local error in processing\n";
+					std::cout << "Answered: " << to_send << std::endl;
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
+				}
+
+				to_send = "257 Deleted.\n";
 				std::cout << "Answered: " << to_send << std::endl;
 				send(command_socket, to_send.c_str(), to_send.size(), 0);
 			}
@@ -376,7 +423,7 @@ void working_thread(SOCKET command_socket)
 				// Take out those spaces
 				fileName = Trim(fileName);
 
-				File file_to_read = File::getCurrentWorkingDirectory().getChildFile(fileName);
+				File file_to_read = currentWorkingDirectory.getChildFile(fileName);
 
 				if (!file_to_read.existsAsFile())
 				{
