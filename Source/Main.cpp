@@ -358,16 +358,6 @@ void working_thread(SOCKET command_socket)
 			else if (msg.substr(0, 4) == "RETR")
 			{
 				// Retrieve
-				// First, make sure you're in image mode
-				//if (!image_mode)
-				//{
-				//	// Not yet in image mode
-				//	std::cout << "Attempted to RETR before entering image mode." << std::endl;
-				//	to_send = "451 Requested action aborted: local error in processing\n";
-				//	std::cout << "Answered: " << to_send << std::endl;
-				//	send(command_socket, to_send.c_str(), to_send.size(), 0);
-				//	continue;
-				//}
 
 				// Now, make sure PORT has been called
 				if (data_socket == INVALID_SOCKET)
@@ -385,9 +375,10 @@ void working_thread(SOCKET command_socket)
 
 				// Take out those spaces
 				fileName = Trim(fileName);
-				int sourceFile = _open(fileName.c_str(), O_RDONLY);
 
-				if (sourceFile < 0)
+				File file_to_read = File::getCurrentWorkingDirectory().getChildFile(fileName);
+
+				if (!file_to_read.existsAsFile())
 				{
 					// File not found
 					std::cout << "Error opening source file: |" << msg.substr(5) << "|" << std::endl;
@@ -397,49 +388,31 @@ void working_thread(SOCKET command_socket)
 					continue;
 				}
 
+				FileInputStream input_stream(file_to_read);
+
 				//tell the client that data transfer is about to happen
 				to_send = "125 Data connection already open; transfer starting.\n";
 				std::cout << "Answered: " << to_send << std::endl;
 				send(command_socket, to_send.c_str(), to_send.size(), 0);
 
-				long size = File::getCurrentWorkingDirectory().getChildFile(fileName).getSize();
+				int bytes_to_read = file_to_read.getSize();
 
-				//int bytes_read = 0;
-
-				//// Read and write
-				//while ((bytes_read = _read(sourceFile, recvbuf, recvbuflen)) > 0)
-				//{
-				//	// write to data port
-				//	send(data_socket, recvbuf, bytes_read, 0);
-				//	// clear buffer
-				//	recvbuf[0] = '\0';
-				//}
-
-				while (size > 0)
+				while (bytes_to_read > 0)
 				{
-					if (size > recvbuflen)
+					if (bytes_to_read > recvbuflen)
 					{
-						_read(sourceFile, recvbuf, recvbuflen);
-						// write to data port
+						input_stream.read(recvbuf, recvbuflen);
 						send(data_socket, recvbuf, recvbuflen, 0);
-						// clear buffer
-						//recvbuf[0] = '\0';
-
-						size -= recvbuflen;
+						bytes_to_read -= recvbuflen;
 					}
 					else
 					{
-						_read(sourceFile, recvbuf, size);
-						// write to data port
-						send(data_socket, recvbuf, size, 0);
-						// clear buffer
-						//recvbuf[0] = '\0';
-
-						size = 0;
+						input_stream.read(recvbuf, bytes_to_read);
+						send(data_socket, recvbuf, bytes_to_read, 0);
+						bytes_to_read = 0;
 					}
 				}
 
-				_close(sourceFile);
 				closesocket(data_socket);
 				data_socket = INVALID_SOCKET;
 
