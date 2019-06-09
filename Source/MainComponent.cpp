@@ -52,9 +52,8 @@ void MainComponent::append_text_to_log(std::string str)
 }
 
 
-// Gets the fd for the socket. Returns -1 on failure
-// toBind - whether you bind or connect
-// address - address to connect to (not used for bind)
+// Gets the fd for the socket. Returns INVALID_SOCKET on failure
+// toBind - true for command socket
 SOCKET MainComponent::getSocketFD(char* s, bool toBind, std::string address)
 {
 	int status;
@@ -225,14 +224,12 @@ void MainComponent::working_thread(SOCKET command_socket)
 
 			if (msg.substr(0, 4) == "USER")
 			{
-				// Accept all users because I'm secure like that
 				to_send = "230 User logged in, proceed.\n";
 				append_text_to_log(to_send);
 				send(command_socket, to_send.c_str(), to_send.size(), 0);
 			}
 			else if (msg.substr(0, 4) == "PASS")
 			{
-				// Accept all users because I'm secure like that
 				to_send = "230 User logged in, proceed.\n";
 				append_text_to_log(to_send);
 				send(command_socket, to_send.c_str(), to_send.size(), 0);
@@ -246,12 +243,13 @@ void MainComponent::working_thread(SOCKET command_socket)
 			}
 			else if (msg.substr(0, 3) == "PWD")
 			{
-				to_send = "257 \"" + currentWorkingDirectory.getFullPathName().toStdString() + "\\\" is your current location\n";
+				to_send = "250 \"" + currentWorkingDirectory.getFullPathName().toStdString() + "\\\" is your current location\n";
 				append_text_to_log(to_send);
 				send(command_socket, to_send.c_str(), to_send.size(), 0);
 			}
 			else if (msg.substr(0, 4) == "TYPE")
 			{
+				//Switching between ASCII and Binary modes
 				if (msg.substr(5, 1) == "I")
 				{
 					image_mode = true;
@@ -319,13 +317,8 @@ void MainComponent::working_thread(SOCKET command_socket)
 				// Open directory
 				File& directory = currentWorkingDirectory;
 				std::string files = "";
-				if (Trim(msg) == "LIST")
+				if (Trim(msg) != "LIST")
 				{
-					append_text_to_log("LIST with param");
-				}
-				else
-				{
-					append_text_to_log(to_send);
 					directory = directory.getChildFile(Trim(msg.substr(5)));
 				}
 
@@ -369,7 +362,7 @@ void MainComponent::working_thread(SOCKET command_socket)
 				currentWorkingDirectory = currentWorkingDirectory.getParentDirectory();
 				currentWorkingDirectory.setAsCurrentWorkingDirectory();
 
-				to_send = "250 Okay.\n";
+				to_send = "250 Requested file action okay, completed.\n";
 				append_text_to_log(to_send);
 				send(command_socket, to_send.c_str(), to_send.size(), 0);
 			}
@@ -378,12 +371,13 @@ void MainComponent::working_thread(SOCKET command_socket)
 				currentWorkingDirectory = currentWorkingDirectory.getChildFile(Trim(msg.substr(4)));
 				currentWorkingDirectory.setAsCurrentWorkingDirectory();
 
-				to_send = "250 Okay.\n";
+				to_send = "250 Requested file action okay, completed.\n";
 				append_text_to_log(to_send);
 				send(command_socket, to_send.c_str(), to_send.size(), 0);
 			}
 			else if (msg.substr(0, 4) == "FEAT")
 			{
+				// Send UTF8 feature for normal naming of files
 				to_send = "211-Features:\nUTF8\n211 END\n";
 				append_text_to_log(to_send);
 				send(command_socket, to_send.c_str(), to_send.size(), 0);
@@ -397,7 +391,7 @@ void MainComponent::working_thread(SOCKET command_socket)
 
 				if (new_dir.createDirectory().wasOk())
 				{
-					to_send = "257 Created directory.\n";
+					to_send = "257 Created " + dir_name + "\n";
 					append_text_to_log(to_send);
 					send(command_socket, to_send.c_str(), to_send.size(), 0);
 				}
@@ -417,7 +411,7 @@ void MainComponent::working_thread(SOCKET command_socket)
 
 				if (file_to_delete.deleteFile())
 				{
-					to_send = "257 Deleted.\n";
+					to_send = "250 Requested file action okay, completed.\n";
 					append_text_to_log(to_send);
 					send(command_socket, to_send.c_str(), to_send.size(), 0);
 				}
@@ -437,7 +431,7 @@ void MainComponent::working_thread(SOCKET command_socket)
 
 				if (dir_to_delete.deleteRecursively())
 				{
-					to_send = "257 Deleted.\n";
+					to_send = "250 Requested file action okay, completed.\n";
 					append_text_to_log(to_send);
 					send(command_socket, to_send.c_str(), to_send.size(), 0);
 				}
@@ -447,17 +441,13 @@ void MainComponent::working_thread(SOCKET command_socket)
 					append_text_to_log(to_send);
 					send(command_socket, to_send.c_str(), to_send.size(), 0);
 				}
-
-				to_send = "257 Deleted.\n";
-				append_text_to_log(to_send);
-				send(command_socket, to_send.c_str(), to_send.size(), 0);
 			}
 			else if (msg.substr(0, 4) == "RNFR")
 			{
 				std::string name = msg.substr(5);
 				rename_from_filename = Trim(name);
 
-				to_send = "250 Okay\n";
+				to_send = "250 Requested file action okay, completed.\n";
 				append_text_to_log(to_send);
 				send(command_socket, to_send.c_str(), to_send.size(), 0);
 			}
@@ -469,9 +459,10 @@ void MainComponent::working_thread(SOCKET command_socket)
 				File file_to_rename = currentWorkingDirectory.getChildFile(rename_from_filename);
 				File new_file = currentWorkingDirectory.getChildFile(name);
 
+				//moveFileTo renames the file or directory if the base directory is the same
 				if (file_to_rename.moveFileTo(new_file))
 				{
-					to_send = "250 Okay\n";
+					to_send = "250	Requested file action okay, completed.\n";
 					append_text_to_log(to_send);
 					send(command_socket, to_send.c_str(), to_send.size(), 0);
 				}
