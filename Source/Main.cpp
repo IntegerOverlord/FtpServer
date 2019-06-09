@@ -402,10 +402,61 @@ void working_thread(SOCKET command_socket)
 				std::cout << "Answered: " << to_send << std::endl;
 				send(command_socket, to_send.c_str(), to_send.size(), 0);
 			}
+			else if (msg.substr(0, 4) == "STOR")
+			{
+				// Now, make sure PORT has been called
+				if (data_socket == INVALID_SOCKET)
+				{
+					// Port hasn't been set
+					std::cout << "Attempted to STOR before porting." << std::endl;
+					to_send = "451 Requested action aborted: local error in processing\n";
+					std::cout << "Answered: " << to_send << std::endl;
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
+					continue;
+				}
+
+				// get file
+				std::string fileName = msg.substr(5);
+				// Take out those spaces
+				fileName = Trim(fileName);
+				File file_to_create = currentWorkingDirectory.getChildFile(fileName);
+
+				if (file_to_create.create().wasOk())
+				{
+					FileOutputStream output_stream(file_to_create);
+					if (output_stream.openedOk())
+					{
+						output_stream.setPosition(0);
+						output_stream.truncate();
+
+						// Tell the client that reading is about to start
+						to_send = "125 Data connection already open; transfer starting.\n";
+						send(command_socket, to_send.c_str(), to_send.size(), 0);
+
+						int bytes_read = 0;
+
+						while ((bytes_read = recv(data_socket, recvbuf, recvbuflen, 0)) > 0)
+						{
+							output_stream.write(recvbuf, bytes_read);
+							
+							recvbuf[0] = '\0';
+						}
+
+						to_send = "250 Requested file action okay, completed.\n";
+						send(command_socket, to_send.c_str(), to_send.size(), 0);
+					}
+				}
+				else
+				{
+					std::cout << "Error during file creation" << std::endl;
+					to_send = "451 Requested action aborted: local error in processing\n";
+					std::cout << "Answered: " << to_send << std::endl;
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
+					continue;
+				}
+			}
 			else if (msg.substr(0, 4) == "RETR")
 			{
-				// Retrieve
-
 				// Now, make sure PORT has been called
 				if (data_socket == INVALID_SOCKET)
 				{
