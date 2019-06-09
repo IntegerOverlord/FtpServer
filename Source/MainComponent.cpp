@@ -224,7 +224,7 @@ void MainComponent::working_thread(SOCKET command_socket)
 
 			if (msg.substr(0, 4) == "USER")
 			{
-				to_send = "230 User logged in, proceed.\n";
+				to_send = "331 User name okay, need password.\n";
 				append_text_to_log(to_send);
 				send(command_socket, to_send.c_str(), to_send.size(), 0);
 			}
