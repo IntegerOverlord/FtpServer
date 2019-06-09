@@ -2,11 +2,11 @@
 
 <Project ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="FtpServerJuceConsole\Source">
-      <UniqueIdentifier>{230A857C-52D1-17D4-CE12-0296A355EBAE}</UniqueIdentifier>
+    <Filter Include="FtpServerJuce\Source">
+      <UniqueIdentifier>{BEAD56C1-5D2D-C13E-A373-949B4D56DEE6}</UniqueIdentifier>
     </Filter>
-    <Filter Include="FtpServerJuceConsole">
-      <UniqueIdentifier>{4F059C2C-8DE3-CABF-BACC-F92DEBC7D328}</UniqueIdentifier>
+    <Filter Include="FtpServerJuce">
+      <UniqueIdentifier>{B94C11E6-A19F-E523-7EA5-7E14A018DE99}</UniqueIdentifier>
     </Filter>
     <Filter Include="JUCE Modules\juce_audio_basics\audio_play_head">
       <UniqueIdentifier>{EB58F05A-A968-CEBE-40C4-107CDD8F240F}</UniqueIdentifier>
@@ -398,7 +398,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\Source\Main.cpp">
-      <Filter>FtpServerJuceConsole\Source</Filter>
+      <Filter>FtpServerJuce\Source</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Source\MainComponent.cpp">
+      <Filter>FtpServerJuce\Source</Filter>
     </ClCompile>
     <ClCompile Include="C:\JUCE\modules\juce_audio_basics\buffers\juce_AudioChannelSet.cpp">
       <Filter>JUCE Modules\juce_audio_basics\buffers</Filter>
@@ -2232,6 +2235,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\Source\MainComponent.h">
+      <Filter>FtpServerJuce\Source</Filter>
+    </ClInclude>
     <ClInclude Include="C:\JUCE\modules\juce_audio_basics\audio_play_head\juce_AudioPlayHead.h">
       <Filter>JUCE Modules\juce_audio_basics\audio_play_head</Filter>
     </ClInclude>

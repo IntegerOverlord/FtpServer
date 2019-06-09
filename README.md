@@ -1,1 +1,1 @@
-FtpServerJuceConsole
+FtpServerJuce

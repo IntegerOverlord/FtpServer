@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<JUCERPROJECT id="BwIdWN" name="FtpServerJuceConsole" projectType="consoleapp"
-              jucerVersion="5.4.3">
-  <MAINGROUP id="nvmr7H" name="FtpServerJuceConsole">
-    <GROUP id="{6F3FDB21-5D73-2D25-09EF-88948E7EF52A}" name="Source">
-      <FILE id="MzAyjK" name="Main.cpp" compile="1" resource="0" file="Source/Main.cpp"/>
+<JUCERPROJECT id="XN4TJV" name="FtpServerJuce" projectType="guiapp" jucerVersion="5.4.3">
+  <MAINGROUP id="FF1OTk" name="FtpServerJuce">
+    <GROUP id="{D00FDBFF-8BF2-19FE-6E07-06D45F760737}" name="Source">
+      <FILE id="zYeUyC" name="Main.cpp" compile="1" resource="0" file="Source/Main.cpp"/>
+      <FILE id="feO6cC" name="MainComponent.cpp" compile="1" resource="0"
+            file="Source/MainComponent.cpp"/>
+      <FILE id="ZvgcV8" name="MainComponent.h" compile="0" resource="0" file="Source/MainComponent.h"/>
     </GROUP>
   </MAINGROUP>
   <EXPORTFORMATS>
