@@ -149,10 +149,10 @@ void working_thread(SOCKET command_socket)
 	int iResult;
 
 	std::string to_send;
-
 	bool image_mode = false;
 	SOCKET data_socket = INVALID_SOCKET;
 	File currentWorkingDirectory = File::getCurrentWorkingDirectory();
+	std::string rename_from_filename;
 
 	to_send = "220 Service ready for new user.\n";
 	if (send(command_socket, to_send.c_str(), to_send.length(), 0) == -1)
@@ -401,6 +401,36 @@ void working_thread(SOCKET command_socket)
 				to_send = "257 Deleted.\n";
 				std::cout << "Answered: " << to_send << std::endl;
 				send(command_socket, to_send.c_str(), to_send.size(), 0);
+			}
+			else if (msg.substr(0, 4) == "RNFR")
+			{
+				std::string name = msg.substr(5);
+				rename_from_filename = Trim(name);
+
+				to_send = "250 Okay\n";
+				std::cout << "Answered: " << to_send << std::endl;
+				send(command_socket, to_send.c_str(), to_send.size(), 0);
+			}
+			else if (msg.substr(0, 4) == "RNTO")
+			{
+				std::string name = msg.substr(5);
+				name = Trim(name);
+
+				File file_to_rename = currentWorkingDirectory.getChildFile(rename_from_filename);
+				File new_file = currentWorkingDirectory.getChildFile(name);
+
+				if (file_to_rename.moveFileTo(new_file))
+				{
+					to_send = "250 Okay\n";
+					std::cout << "Answered: " << to_send << std::endl;
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
+				}
+				else
+				{
+					to_send = "451 Requested action aborted: local error in processing\n";
+					std::cout << "Answered: " << to_send << std::endl;
+					send(command_socket, to_send.c_str(), to_send.size(), 0);
+				}
 			}
 			else if (msg.substr(0, 4) == "STOR")
 			{
