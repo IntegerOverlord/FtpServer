@@ -54,7 +54,7 @@ void MainComponent::append_text_to_log(std::string str)
 
 // Gets the fd for the socket. Returns INVALID_SOCKET on failure
 // toBind - true for command socket
-SOCKET MainComponent::getSocketFD(char* s, bool toBind, std::string address)
+SOCKET MainComponent::get_socket(char* s, bool toBind, std::string address)
 {
 	int status;
 	struct addrinfo hints;
@@ -144,12 +144,12 @@ SOCKET MainComponent::getSocketFD(char* s, bool toBind, std::string address)
 	return sock;
 }
 
-SOCKET MainComponent::getSocketFD(int p, bool toBind, std::string address)
+SOCKET MainComponent::get_socket(int p, bool toBind, std::string address)
 {
 	char port[6];
 	sprintf(port, "%d", p);
 	port[5] = '\0';
-	return getSocketFD(port, toBind, address);
+	return get_socket(port, toBind, address);
 }
 
 // Used to trim spaces and line feeds
@@ -195,14 +195,14 @@ void MainComponent::acception_thread(SOCKET listen_socket)
 
 void MainComponent::working_thread(SOCKET command_socket)
 {
-	char recvbuf[DEFAULT_BUFLEN];
-	int recvbuflen = DEFAULT_BUFLEN;
+	char buf[DEFAULT_BUFLEN];
+	int buflen = DEFAULT_BUFLEN;
 	int iResult;
 
 	std::string to_send;
 	bool image_mode = false;
 	SOCKET data_socket = INVALID_SOCKET;
-	File currentWorkingDirectory = File::getCurrentWorkingDirectory();
+	File current_working_directory = File::getCurrentWorkingDirectory();
 	std::string rename_from_filename;
 
 	to_send = "220 Service ready for new user.\n";
@@ -212,12 +212,12 @@ void MainComponent::working_thread(SOCKET command_socket)
 	// Receive until the peer shuts down the connection
 	do {
 
-		iResult = recv(command_socket, recvbuf, recvbuflen, 0);
+		iResult = recv(command_socket, buf, buflen, 0);
 		if (iResult > 0) {
 			std::string msg = "";
 			for (int x = 0; x < iResult; x++)
 			{
-				msg.push_back(recvbuf[x]);
+				msg.push_back(buf[x]);
 			}
 
 			append_text_to_log("Received: " + msg);
@@ -243,7 +243,7 @@ void MainComponent::working_thread(SOCKET command_socket)
 			}
 			else if (msg.substr(0, 3) == "PWD")
 			{
-				to_send = "250 \"" + currentWorkingDirectory.getFullPathName().toStdString() + "\\\" is your current location\n";
+				to_send = "250 \"" + current_working_directory.getFullPathName().toStdString() + "\\\" is your current location\n";
 				append_text_to_log(to_send);
 				send(command_socket, to_send.c_str(), to_send.size(), 0);
 			}
@@ -270,8 +270,8 @@ void MainComponent::working_thread(SOCKET command_socket)
 				int c1 = msg.rfind(",", c2 - 1);
 
 				// Calculate port number
-				int portNumber = atoi(msg.substr(c1 + 1, c2 - c1).c_str()) * 256;
-				portNumber += atoi(msg.substr(c2 + 1).c_str());
+				int port_number = atoi(msg.substr(c1 + 1, c2 - c1).c_str()) * 256;
+				port_number += atoi(msg.substr(c2 + 1).c_str());
 
 				// Get address
 				std::string address = msg.substr(5, c1 - 5);
@@ -283,10 +283,10 @@ void MainComponent::working_thread(SOCKET command_socket)
 					}
 				}
 
-				append_text_to_log("Attempting to open port: " + std::to_string(portNumber) + "\n");
+				append_text_to_log("Attempting to open port: " + std::to_string(port_number) + "\n");
 				append_text_to_log("From address: " + address + "\n");
 
-				data_socket = getSocketFD(portNumber, false, address);
+				data_socket = get_socket(port_number, false, address);
 
 				if (data_socket == INVALID_SOCKET)
 				{
@@ -315,7 +315,7 @@ void MainComponent::working_thread(SOCKET command_socket)
 				}
 
 				// Open directory
-				File& directory = currentWorkingDirectory;
+				File& directory = current_working_directory;
 				std::string files = "";
 				if (Trim(msg) != "LIST")
 				{
@@ -325,8 +325,8 @@ void MainComponent::working_thread(SOCKET command_socket)
 				DirectoryIterator iter(directory, false, "*", File::findFilesAndDirectories);
 				while (iter.next())
 				{
-					File theFileItFound(iter.getFile());
-					if (theFileItFound.isDirectory())
+					File file_found(iter.getFile());
+					if (file_found.isDirectory())
 					{
 						files += "drwxr-xr-x 1 owner group\015\012";
 					}
@@ -334,10 +334,10 @@ void MainComponent::working_thread(SOCKET command_socket)
 					{
 						files += "-rw-r--r-- 1 owner group\015\012";
 					}
-					Time lastModificationTime = theFileItFound.getLastModificationTime();
-					files += std::to_string(theFileItFound.getSize()) + " " + lastModificationTime.getMonthName(true).toStdString() + " "
+					Time lastModificationTime = file_found.getLastModificationTime();
+					files += std::to_string(file_found.getSize()) + " " + lastModificationTime.getMonthName(true).toStdString() + " "
 						+ std::to_string(lastModificationTime.getDayOfMonth()) + " " + std::to_string(lastModificationTime.getHours()) + ":" + std::to_string(lastModificationTime.getMinutes())
-						+ " " + theFileItFound.getFileName().toStdString() + "\n";
+						+ " " + file_found.getFileName().toStdString() + "\n";
 				}
 
 				//tell the client that data transfer is about to happen
@@ -359,8 +359,8 @@ void MainComponent::working_thread(SOCKET command_socket)
 			}
 			else if (msg.substr(0, 4) == "CDUP")
 			{
-				currentWorkingDirectory = currentWorkingDirectory.getParentDirectory();
-				currentWorkingDirectory.setAsCurrentWorkingDirectory();
+				current_working_directory = current_working_directory.getParentDirectory();
+				current_working_directory.setAsCurrentWorkingDirectory();
 
 				to_send = "250 Requested file action okay, completed.\n";
 				append_text_to_log(to_send);
@@ -368,8 +368,8 @@ void MainComponent::working_thread(SOCKET command_socket)
 			}
 			else if (msg.substr(0, 3) == "CWD")
 			{
-				currentWorkingDirectory = currentWorkingDirectory.getChildFile(Trim(msg.substr(4)));
-				currentWorkingDirectory.setAsCurrentWorkingDirectory();
+				current_working_directory = current_working_directory.getChildFile(Trim(msg.substr(4)));
+				current_working_directory.setAsCurrentWorkingDirectory();
 
 				to_send = "250 Requested file action okay, completed.\n";
 				append_text_to_log(to_send);
@@ -387,7 +387,7 @@ void MainComponent::working_thread(SOCKET command_socket)
 				std::string dir_name = msg.substr(4);
 				dir_name = Trim(dir_name);
 
-				File new_dir = currentWorkingDirectory.getChildFile(dir_name);
+				File new_dir = current_working_directory.getChildFile(dir_name);
 
 				if (new_dir.createDirectory().wasOk())
 				{
@@ -407,7 +407,7 @@ void MainComponent::working_thread(SOCKET command_socket)
 				std::string file_name = msg.substr(5);
 				file_name = Trim(file_name);
 
-				File file_to_delete = currentWorkingDirectory.getChildFile(file_name);
+				File file_to_delete = current_working_directory.getChildFile(file_name);
 
 				if (file_to_delete.deleteFile())
 				{
@@ -427,7 +427,7 @@ void MainComponent::working_thread(SOCKET command_socket)
 				std::string dir_name = msg.substr(4);
 				dir_name = Trim(dir_name);
 
-				File dir_to_delete = currentWorkingDirectory.getChildFile(dir_name);
+				File dir_to_delete = current_working_directory.getChildFile(dir_name);
 
 				if (dir_to_delete.deleteRecursively())
 				{
@@ -456,8 +456,8 @@ void MainComponent::working_thread(SOCKET command_socket)
 				std::string name = msg.substr(5);
 				name = Trim(name);
 
-				File file_to_rename = currentWorkingDirectory.getChildFile(rename_from_filename);
-				File new_file = currentWorkingDirectory.getChildFile(name);
+				File file_to_rename = current_working_directory.getChildFile(rename_from_filename);
+				File new_file = current_working_directory.getChildFile(name);
 
 				//moveFileTo renames the file or directory if the base directory is the same
 				if (file_to_rename.moveFileTo(new_file))
@@ -490,7 +490,7 @@ void MainComponent::working_thread(SOCKET command_socket)
 				std::string fileName = msg.substr(5);
 				// Take out those spaces
 				fileName = Trim(fileName);
-				File file_to_create = currentWorkingDirectory.getChildFile(fileName);
+				File file_to_create = current_working_directory.getChildFile(fileName);
 
 				if (file_to_create.create().wasOk())
 				{
@@ -506,11 +506,11 @@ void MainComponent::working_thread(SOCKET command_socket)
 
 						int bytes_read = 0;
 
-						while ((bytes_read = recv(data_socket, recvbuf, recvbuflen, 0)) > 0)
+						while ((bytes_read = recv(data_socket, buf, buflen, 0)) > 0)
 						{
-							output_stream.write(recvbuf, bytes_read);
+							output_stream.write(buf, bytes_read);
 
-							recvbuf[0] = '\0';
+							buf[0] = '\0';
 						}
 
 						to_send = "250 Requested file action okay, completed.\n";
@@ -548,7 +548,7 @@ void MainComponent::working_thread(SOCKET command_socket)
 				// Take out those spaces
 				fileName = Trim(fileName);
 
-				File file_to_read = currentWorkingDirectory.getChildFile(fileName);
+				File file_to_read = current_working_directory.getChildFile(fileName);
 
 				if (!file_to_read.existsAsFile())
 				{
@@ -573,16 +573,16 @@ void MainComponent::working_thread(SOCKET command_socket)
 
 					while (bytes_to_read > 0)
 					{
-						if (bytes_to_read > recvbuflen)
+						if (bytes_to_read > buflen)
 						{
-							input_stream.read(recvbuf, recvbuflen);
-							send(data_socket, recvbuf, recvbuflen, 0);
-							bytes_to_read -= recvbuflen;
+							input_stream.read(buf, buflen);
+							send(data_socket, buf, buflen, 0);
+							bytes_to_read -= buflen;
 						}
 						else
 						{
-							input_stream.read(recvbuf, bytes_to_read);
-							send(data_socket, recvbuf, bytes_to_read, 0);
+							input_stream.read(buf, bytes_to_read);
+							send(data_socket, buf, bytes_to_read, 0);
 							bytes_to_read = 0;
 						}
 					}
@@ -757,12 +757,12 @@ void MainComponent::buttonClicked (Button* buttonThatWasClicked)
 
 			if (portNumberEditor->getText() == "")
 			{
-				SOCKET listen_socket = getSocketFD(DEFAULT_PORT, true, "");
+				SOCKET listen_socket = get_socket(DEFAULT_PORT, true, "");
 				threads_running.push_back(std::thread(&MainComponent::acception_thread, this, listen_socket));
 			}
 			else
 			{
-				SOCKET listen_socket = getSocketFD(portNumberEditor->getText().getIntValue(), true, "");
+				SOCKET listen_socket = get_socket(portNumberEditor->getText().getIntValue(), true, "");
 				threads_running.push_back(std::thread(&MainComponent::acception_thread, this, listen_socket));
 			}
 

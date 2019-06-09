@@ -79,8 +79,8 @@ private:
 	void working_thread(SOCKET command_socket);
 	void acception_thread(SOCKET listen_socket);
 	void append_text_to_log(std::string str);
-	SOCKET getSocketFD(char* s, bool toBind, std::string address);
-	SOCKET getSocketFD(int p, bool toBind, std::string address);
+	SOCKET get_socket(char* s, bool toBind, std::string address);
+	SOCKET get_socket(int p, bool toBind, std::string address);
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
