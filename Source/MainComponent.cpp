@@ -569,29 +569,37 @@ void MainComponent::working_thread(SOCKET command_socket)
 					continue;
 				}
 
-				FileInputStream input_stream(file_to_read);
-
 				//tell the client that data transfer is about to happen
 				to_send = "125 Data connection already open; transfer starting.\n";
 				append_text_to_log(to_send);
 				send(command_socket, to_send.c_str(), to_send.size(), 0);
 
-				int bytes_to_read = file_to_read.getSize();
-
-				while (bytes_to_read > 0)
+				if (image_mode)
 				{
-					if (bytes_to_read > recvbuflen)
+					FileInputStream input_stream(file_to_read);
+
+					int bytes_to_read = file_to_read.getSize();
+
+					while (bytes_to_read > 0)
 					{
-						input_stream.read(recvbuf, recvbuflen);
-						send(data_socket, recvbuf, recvbuflen, 0);
-						bytes_to_read -= recvbuflen;
+						if (bytes_to_read > recvbuflen)
+						{
+							input_stream.read(recvbuf, recvbuflen);
+							send(data_socket, recvbuf, recvbuflen, 0);
+							bytes_to_read -= recvbuflen;
+						}
+						else
+						{
+							input_stream.read(recvbuf, bytes_to_read);
+							send(data_socket, recvbuf, bytes_to_read, 0);
+							bytes_to_read = 0;
+						}
 					}
-					else
-					{
-						input_stream.read(recvbuf, bytes_to_read);
-						send(data_socket, recvbuf, bytes_to_read, 0);
-						bytes_to_read = 0;
-					}
+				}
+				else
+				{
+					String file_text = file_to_read.loadFileAsString();
+					send(data_socket, file_text.getCharPointer(), file_text.length(), 0);
 				}
 
 				closesocket(data_socket);
@@ -768,6 +776,7 @@ void MainComponent::buttonClicked (Button* buttonThatWasClicked)
 			}
 
 			StartStopButton->setButtonText(TRANS("Stop"));
+			portNumberEditor->setReadOnly(true);
 			append_text_to_log("FTP Server Started\n");
 		}
 		else
@@ -784,6 +793,7 @@ void MainComponent::buttonClicked (Button* buttonThatWasClicked)
 			threads_running.clear();
 
 			StartStopButton->setButtonText(TRANS("Start"));
+			portNumberEditor->setReadOnly(false);
 			append_text_to_log("FTP Server Stopped\n");
 		}
     }
